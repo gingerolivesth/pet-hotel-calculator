@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Pet Hotel & Grooming Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand" data-t="brand">🐾 Pet Hotel Calculator</div>
+    <div style="display:flex;align-items:center;">
+      <div class="tag" data-t="staff">Staff Tool</div>
+      <button type="button" class="lang-btn" id="langBtn">🇹🇭 ภาษาไทย</button>
+    </div>
+  </header>
+
+  <div class="maintabs">
+    <button type="button" class="active" id="tabEst" data-t="tEst">New Estimate</button>
+    <button type="button" id="tabFin" data-t="tFin">Final Bill</button>
+  </div>
+
+  <!-- ═══════ ESTIMATE VIEW ═══════ -->
+  <div id="estView">
+    <div class="card">
+      <div class="field">
+        <label data-t="guestN">Guest Name</label>
+        <input type="text" id="guestName" data-tp="guestPh" placeholder="e.g. Somchai">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <label class="toggle-head"><input type="checkbox" id="incBoard" checked><span data-t="boarding">Boarding</span></label>
+      </div>
+      <div id="boardBlock">
+        <div class="field"><label data-t="petType">Pet Type</label>
+          <div class="seg" id="petSeg">
+            <button type="button" class="active" data-v="dog" data-t="dog">Dog</button>
+            <button type="button" data-v="cat" data-t="cat">Cat</button>
+          </div>
+        </div>
+        <div class="field" id="dogCF"><label data-t="numDogs">Number of Dogs</label>
+          <div class="seg" id="dogCSeg">
+            <button type="button" class="active" data-v="1" data-t="oneDog">1 Dog</button>
+            <button type="button" data-v="2" data-t="twoDogs">2 Dogs</button>
+          </div>
+        </div>
+        <div class="field" id="catRF" style="display:none;"><label data-t="roomSize">Room Size</label>
+          <div class="seg" id="catRSeg">
+            <button type="button" class="active" data-v="small" data-t="smRoom">Small Room (1 cat)</button>
+            <button type="button" data-v="big" data-t="bgRoom">Big Room (2 cats)</button>
+          </div>
+        </div>
+        <div class="field" id="catSF" style="display:none;"><label data-t="extraCat">Extra Cat</label>
+          <label class="checkline"><input type="checkbox" id="catSq"><span data-t="extraCatLbl">Extra cat (+50 THB/night)</span></label>
+        </div>
+        <div class="row2">
+          <div class="field"><label data-t="startD">Start Date</label><input type="date" id="dStart"></div>
+          <div class="field"><label data-t="endD">End Date</label><input type="date" id="dEnd"></div>
+        </div>
+        <div class="field"><label data-t="discBoardLbl">Discount (boarding only)</label>
+          <select id="discBoard">
+            <option value="0" data-t="noDisc">No discount</option>
+            <option value="10" data-t="d10">10% off</option>
+            <option value="20" data-t="d20">20% off</option>
+            <option value="30" data-t="d30">30% off</option>
+            <option value="40" data-t="d40">40% off</option>
+            <option value="50" data-t="d50">50% off</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <label class="toggle-head"><input type="checkbox" id="incGroom"><span data-t="grooming">Grooming</span></label>
+      </div>
+      <div id="groomBlkE" style="display:none;"></div>
+    </div>
+
+    <div class="error" id="estErr" style="display:none;"></div>
+    <button class="generate-btn" id="genEstBtn" data-t="genEst">Generate Estimate</button>
+
+    <div class="receipt-wrap" id="estRW">
+      <div class="card" style="margin-top:14px;padding:0;overflow:hidden;">
+        <div class="receipt" id="estRT"></div>
+      </div>
+      <div class="receipt-actions">
+        <button type="button" id="estCopyBtn" class="primary" data-t="copyText">Copy Text</button>
+        <button type="button" id="estSaveBtn" data-t="saveBooking">Save Booking</button>
+      </div>
+      <div class="smsg" id="estSaveSt"></div>
+    </div>
+  </div>
+
+  <!-- ═══════ FINAL BILL VIEW ═══════ -->
+  <div id="finView" style="display:none;">
+    <div class="abw" id="bookWrap">
+      <div class="abh">
+        <h3 data-t="allBookings">All Saved Bookings</h3>
+        <button type="button" id="refreshBtn" data-t="refresh">Refresh</button>
+      </div>
+      <div class="blist" id="bookList"><div class="bempty" data-t="loading">Loading...</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" data-t="searchByName">Search by Name</div>
+      <div class="search-row">
+        <input type="text" id="searchNm" data-tp="guestNamePh" placeholder="Guest name">
+        <button type="button" id="searchBtn" data-t="find">Find</button>
+      </div>
+      <div id="searchRes"></div>
+    </div>
+
+    <div id="finForm" style="display:none;">
+      <div class="loaded-banner" id="loadedBan"></div>
+
+      <div class="card" id="datesCard" style="display:none;">
+        <div class="card-title" data-t="bookingDates">Booking Dates &amp; Deposit</div>
+        <div id="discInfoBox" style="margin-bottom:12px;"></div>
+        <div id="datesEdit">
+          <div class="row2">
+            <div class="field"><label data-t="checkin">Check-in</label><input type="date" id="finDStart"></div>
+            <div class="field"><label data-t="checkout">Check-out</label><input type="date" id="finDEnd"></div>
+          </div>
+        </div>
+        <div id="datesLock" style="display:none;">
+          <div class="confirmed-box">
+            <div class="dtxt" id="datesLabel"></div>
+            <button type="button" class="alm" id="editDatesBtn" style="margin-top:8px;" data-t="editDates">Edit Dates</button>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label data-t="depPaid">Deposit Paid (THB)</label>
+          <input type="number" id="depPaid" min="0" inputmode="numeric" placeholder="0">
+          <div class="hint" id="depHint"></div>
+        </div>
+        <button type="button" class="confirm-btn" id="confirmBtn" data-t="confirmBooking">Confirm Booking</button>
+      </div>
+
+      <div class="card" id="confirmGroom" style="display:none;">
+        <div class="card-title" data-t="confirmGroomTitle">Confirm Pre-booked Grooming</div>
+        <div class="hint" id="groomHint"></div>
+        <div class="field">
+          <label data-t="actualGroomAmt">Actual grooming amount (THB)</label>
+          <input type="number" id="actualGroom" min="0" inputmode="numeric">
+        </div>
+        <div class="hint" id="groomDiscHint"></div>
+      </div>
+
+      <div class="card" id="extraCard" style="display:none;">
+        <div class="card-title">
+          <label class="toggle-head"><input type="checkbox" id="incExtra"><span data-t="addBoarding">Additional Boarding</span></label>
+        </div>
+        <div id="extraBlock" style="display:none;">
+          <div class="row2">
+            <div class="field"><label data-t="startD">Start Date</label><input type="date" id="extraStart"></div>
+            <div class="field"><label data-t="endD">End Date</label><input type="date" id="extraEnd"></div>
+          </div>
+          <div class="field"><label data-t="discount">Discount</label>
+            <select id="extraDisc">
+              <option value="0" data-t="noDisc">No discount</option>
+              <option value="10" data-t="d10">10% off</option>
+              <option value="20" data-t="d20">20% off</option>
+              <option value="30" data-t="d30">30% off</option>
+              <option value="40" data-t="d40">40% off</option>
+              <option value="50" data-t="d50">50% off</option>
+            </select>
+          </div>
+          <div class="hint" id="extraRateH"></div>
+          <div class="hint" id="extraCalc" style="font-weight:700;color:var(--teal-950);font-size:13px;"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <label class="toggle-head"><input type="checkbox" id="incGroomF"><span data-t="addGrooming">Additional Grooming</span></label>
+        </div>
+        <div id="groomBlkF" style="display:none;"></div>
+        <div class="field" id="addGroomF" style="display:none;margin-top:12px;">
+          <label data-t="actualAddGroomAmt">Actual additional grooming amount (THB)</label>
+          <input type="number" id="addGroomPrice" min="0" inputmode="numeric">
+          <div class="hint" id="addGroomHint"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" data-t="hotelExtras">Hotel Extras</div>
+        <div class="field">
+          <label data-t="afterHours">After-Hours Fee (leave blank if none)</label>
+          <input type="number" id="afterHrs" placeholder="0" min="0" inputmode="numeric">
+        </div>
+        <div class="field" id="daycareF" style="display:none;">
+          <label data-t="latePickup">Late Pickup (hours after 3pm on checkout)</label>
+          <input type="number" id="dcHrs" min="0" step="1" placeholder="0" inputmode="numeric">
+          <div class="hint" data-t="latePickupHint">50 THB per hour. Pickup by 3pm is free.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" data-t="foodTreats">Food / Treats (from supermarket)</div>
+        <div id="foodRows"></div>
+        <button type="button" class="add-line-btn" id="addFoodBtn" data-t="addReceipt">+ Add Receipt</button>
+      </div>
+
+      <div class="error" id="finErr" style="display:none;"></div>
+      <button class="generate-btn" id="genFinBtn" data-t="genFinBill">Generate Final Bill</button>
+
+      <div class="receipt-wrap" id="finRW">
+        <div class="card" style="margin-top:14px;padding:0;overflow:hidden;">
+          <div class="receipt" id="finRT"></div>
+        </div>
+        <div class="receipt-actions">
+          <button type="button" id="finCopyBtn" class="primary" data-t="copyText">Copy Text</button>
+          <button type="button" id="finSaveBtn" data-t="markFin">Mark as Finalized</button>
+        </div>
+        <div class="smsg" id="finSaveSt"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer data-t="footer">Deposit is always 50% of the boarding total.</footer>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
