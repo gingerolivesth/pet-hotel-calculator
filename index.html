@@ -63,6 +63,13 @@
           <div class="field"><label data-t="startD">Start Date</label><input type="date" id="dStart"></div>
           <div class="field"><label data-t="endD">End Date</label><input type="date" id="dEnd"></div>
         </div>
+        <div class="field" id="daycareDurationF" style="display:none;">
+          <label data-t="dayCareDuration">Day Care Duration</label>
+          <div class="seg" id="daycareSeg">
+            <button type="button" class="active" data-v="4" data-t="dc4h">4 Hours (200 THB)</button>
+            <button type="button" data-v="8" data-t="dc8h">8 Hours (300 THB)</button>
+          </div>
+        </div>
         <div class="field"><label data-t="discBoardLbl">Discount (boarding only)</label>
           <select id="discBoard">
             <option value="0" data-t="noDisc">No discount</option>
@@ -200,6 +207,19 @@
           <input type="number" id="dcHrs" min="0" step="1" placeholder="0" inputmode="numeric">
           <div class="hint" data-t="latePickupHint">50 THB per hour. Pickup by 3pm is free.</div>
         </div>
+        <div class="field" id="lateCheckoutF" style="display:none;">
+          <label class="checkline">
+            <input type="checkbox" id="lateCheckoutCb">
+            <span data-t="lateCheckout">Day Care (Late Checkout)</span>
+          </label>
+        </div>
+        <div class="field" id="lateCheckoutDurF" style="display:none;">
+          <label data-t="dayCareDuration">Day Care Duration</label>
+          <div class="seg" id="lateCheckoutSeg">
+            <button type="button" class="active" data-v="4" data-t="dc4h">4 Hours (200 THB)</button>
+            <button type="button" data-v="8" data-t="dc8h">8 Hours (300 THB)</button>
+          </div>
+        </div>
       </div>
 
       <div class="card">
@@ -224,7 +244,7 @@
     </div>
   </div>
 
-  <footer data-t="footer">Deposit is always 50% of the boarding total.</footer>
+  <footer data-t="footer">Deposit is 50% of boarding subtotal.</footer>
 </div>
 
 <script type="module" src="js/app.js"></script>

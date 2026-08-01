@@ -92,7 +92,7 @@ def("foodTreats",   "Food / Treats (from supermarket)","อาหาร / ขน
 def("addReceipt",   "+ Add Receipt",                "+ เพิ่มใบเสร็จ");
 def("genFinBill",   "Generate Final Bill",          "สร้างใบเสร็จ");
 def("markFin",      "Mark as Finalized",            "บันทึกเสร็จสิ้น");
-def("footer",       "Deposit is always 50% of the boarding total.","มัดจำคือ 50% ของค่าฝากเลี้ยง");
+def("footer",       "Deposit is 50% of boarding subtotal.","มัดจำคือ 50% ของค่าฝากเลี้ยง");
 def("enterGn",      "Please enter a guest name.",   "กรุณาใส่ชื่อลูกค้า");
 def("incLeast",     "Include at least Boarding or Grooming.","เลือกอย่างน้อย 1 อย่าง");
 def("selBoth",      "Please select both dates.",    "กรุณาเลือกวันที่");
@@ -115,6 +115,17 @@ def("depositBoardMsg","If you would like to confirm, please make a 50% deposit f
 def("depositMsg",   "If you would like to confirm this booking, please make a 50% deposit","หากต้องการยืนยัน กรุณาชำระมัดจำ 50%");
 def("loadBookingFirst","Please load a booking first.","กรุณาโหลดการจองก่อน");
 def("copyFail",     "Copy failed",                  "คัดลอกไม่สำเร็จ");
+
+/* ── Day Care labels ── */
+def("dayCare",          "Day Care",                  "เดย์แคร์");
+def("dayCareDuration",  "Day Care Duration",         "ระยะเวลาเดย์แคร์");
+def("dc4h",             "4 Hours (200 THB)",         "4 ชม. (200 บาท)");
+def("dc8h",             "8 Hours (300 THB)",         "8 ชม. (300 บาท)");
+def("lateCheckout",     "Day Care (Late Checkout)",  "เดย์แคร์ (รับช้า)");
+def("rcptDayCare",      "DAY CARE",                  "เดย์แคร์");
+def("dayCare4h",        "4 Hours",                   "4 ชม.");
+def("dayCare8h",        "8 Hours",                   "8 ชม.");
+def("dayCareNoDep",     "Day Care \u2014 no deposit required","เดย์แคร์ \u2014 ไม่ต้องมัดจำ");
 
 /* ── Receipt labels ── */
 def("rcptBoarding",  "BOARDING",               "ค่าฝากเลี้ยง");

@@ -2,9 +2,9 @@
 // Final Bill tab — bookings CRUD, final receipt
 // ──────────────────────────────────────────────
 import { T, pctOff, nightLbl, uLabel, fmt, thb, lang } from './i18n.js';
-import { R, DC_RATE, eRate, petS, rLbl, CAT_G, DOG_G } from './pricing.js';
+import { R, DC_RATE, eRate, petS, rLbl, CAT_G, DOG_G, DAYCARE_4H, DAYCARE_8H } from './pricing.js';
 import { state, bkCache } from './state.js';
-import { $, pR, pL, copyToClipboard, showInlineConfirm } from './utils.js';
+import { $, pR, pL, copyToClipboard, showInlineConfirm, setA } from './utils.js';
 import { buildGroom, calcGroom } from './grooming.js';
 import { db, collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, serverTimestamp } from './firebase-config.js';
 
@@ -89,7 +89,17 @@ function loadBooking(id, data) {
   try {
     if (data) {
       var html = T("loaded") + " <b>" + data.guestName + "</b>";
-      if (data.boarding) html += "<br>" + petS(data.boarding) + " \u00b7 " + data.boarding.nights + "N \u00b7 " + data.boarding.startDate + "\u2192" + data.boarding.endDate + "<br>" + T("boarding") + " <b>" + thb(data.boarding.totalDue) + "</b>";
+      if (data.boarding) {
+        if (data.boarding.isDayCare) {
+          var _dch = data.boarding.dayCareHours || 4;
+          var _dcl = _dch === 4 ? T("dayCare4h") : T("dayCare8h");
+          html += "<br>" + petS(data.boarding) + " \u00b7 " + T("dayCare") + " \u00b7 " + data.boarding.startDate + " \u00b7 " + _dcl;
+          html += "<br>" + T("dayCare") + " <b>" + thb(data.boarding.totalDue) + "</b>";
+        } else {
+          html += "<br>" + petS(data.boarding) + " \u00b7 " + data.boarding.nights + "N \u00b7 " + data.boarding.startDate + "\u2192" + data.boarding.endDate;
+          html += "<br>" + T("boarding") + " <b>" + thb(data.boarding.totalDue) + "</b>";
+        }
+      }
       if (data.grooming) {
         var gt = data.grooming.isRange ? fmt(data.grooming.total) + "\u2013" + fmt(data.grooming.totalHigh) : fmt(data.grooming.total);
         html += "<br>" + T("grooming") + " <b>" + gt + " THB</b>";
@@ -114,15 +124,25 @@ function loadBooking(id, data) {
           $("finDStart").value = data.confirmedStartDate; $("finDEnd").value = data.confirmedEndDate;
           $("depPaid").value = data.depositPaid || 0;
           $("datesEdit").style.display = "none"; $("datesLock").style.display = "block"; $("confirmBtn").style.display = "none";
-          var sd2 = new Date(data.confirmedStartDate + "T00:00:00"), ed2 = new Date(data.confirmedEndDate + "T00:00:00");
-          $("datesLabel").textContent = "\u2713 " + data.confirmedStartDate + " \u2192 " + data.confirmedEndDate + " (" + nightLbl(Math.round((ed2 - sd2) / 86400000)) + ")";
+          if (data.boarding.isDayCare) {
+            var _dch2 = data.boarding.dayCareHours || 4;
+            var _dcl2 = _dch2 === 4 ? T("dayCare4h") : T("dayCare8h");
+            $("datesLabel").textContent = "\u2713 " + data.confirmedStartDate + " \u00b7 " + _dcl2;
+          } else {
+            var sd2 = new Date(data.confirmedStartDate + "T00:00:00"), ed2 = new Date(data.confirmedEndDate + "T00:00:00");
+            $("datesLabel").textContent = "\u2713 " + data.confirmedStartDate + " \u2192 " + data.confirmedEndDate + " (" + nightLbl(Math.round((ed2 - sd2) / 86400000)) + ")";
+          }
         } else {
           $("finDStart").value = data.boarding.startDate; $("finDEnd").value = data.boarding.endDate;
           $("depPaid").value = 0;
           $("datesEdit").style.display = "block"; $("datesLock").style.display = "none"; $("confirmBtn").style.display = "block";
         }
         var bOnly = data.boardOnlyTotal || data.boarding.totalDue;
-        $("depHint").textContent = T("depSug") + " " + fmt(Math.round(bOnly * 0.5)) + " " + uLabel();
+        if (data.boarding.isDayCare) {
+          $("depHint").textContent = T("dayCareNoDep");
+        } else {
+          $("depHint").textContent = T("depSug") + " " + fmt(Math.round(bOnly * 0.5)) + " " + uLabel();
+        }
       } else { $("datesCard").style.display = "none"; }
 
       if (data.grooming && data.grooming.isRange) {
@@ -133,17 +153,32 @@ function loadBooking(id, data) {
         $("groomDiscHint").textContent = gdp > 0 ? pctOff(gdp) + " \u2014 " + (lang === "th" ? "ใส่ราคาก่อนลด" : "Enter pre-discount price") : T("enterActual");
       } else { $("confirmGroom").style.display = "none"; }
 
-      if (data.boarding) {
+      if (data.boarding && !data.boarding.isDayCare) {
         $("extraCard").style.display = "block";
         $("incExtra").checked = false; $("extraBlock").style.display = "none";
         $("extraRateH").textContent = rLbl(data.boarding) + ": " + fmt(eRate(data.boarding)) + " " + uLabel() + "/" + (lang === "th" ? "คืน" : "night");
         $("extraCalc").textContent = ""; $("extraDisc").value = "0";
       } else { $("extraCard").style.display = "none"; }
 
-      $("daycareF").style.display = data.boarding ? "block" : "none";
+      $("daycareF").style.display = (data.boarding && !data.boarding.isDayCare) ? "block" : "none";
+
+      /* Late Checkout — only for multi-night, non-day-care stays */
+      if (data.boarding && data.boarding.nights > 1 && !data.boarding.isDayCare) {
+        $("lateCheckoutF").style.display = "block";
+        $("lateCheckoutCb").checked = false;
+        $("lateCheckoutDurF").style.display = "none";
+        state.lateCheckout = false;
+        state.lateCheckoutDuration = "4";
+        setA($("lateCheckoutSeg"), "4");
+      } else {
+        $("lateCheckoutF").style.display = "none";
+        $("lateCheckoutDurF").style.display = "none";
+        state.lateCheckout = false;
+      }
     } else {
       $("datesCard").style.display = "none"; $("confirmGroom").style.display = "none";
       $("extraCard").style.display = "none"; $("daycareF").style.display = "none";
+      $("lateCheckoutF").style.display = "none"; $("lateCheckoutDurF").style.display = "none";
     }
   } catch (e) { console.error("loadBooking:", e); }
 
@@ -238,7 +273,13 @@ export function setupFinalBillUI() {
     $("datesEdit").style.display = "none"; $("datesLock").style.display = "block"; $("confirmBtn").style.display = "none";
     var s = $("finDStart").value, e = $("finDEnd").value;
     var sd = new Date(s + "T00:00:00"), ed = new Date(e + "T00:00:00");
-    $("datesLabel").textContent = "\u2713 " + s + " \u2192 " + e + " (" + nightLbl(Math.round((ed - sd) / 86400000)) + ")";
+    if (state.loadedBooking && state.loadedBooking.data && state.loadedBooking.data.boarding && state.loadedBooking.data.boarding.isDayCare) {
+      var _dcH = state.loadedBooking.data.boarding.dayCareHours || 4;
+      var _dcL = _dcH === 4 ? T("dayCare4h") : T("dayCare8h");
+      $("datesLabel").textContent = "\u2713 " + s + " \u00b7 " + _dcL;
+    } else {
+      $("datesLabel").textContent = "\u2713 " + s + " \u2192 " + e + " (" + nightLbl(Math.round((ed - sd) / 86400000)) + ")";
+    }
     if (state.loadedBooking && state.loadedBooking.id) {
       updateDoc(doc(db, "bookings", state.loadedBooking.id), {
         confirmedDates: true, confirmedStartDate: s, confirmedEndDate: e,
@@ -248,6 +289,25 @@ export function setupFinalBillUI() {
   };
   $("editDatesBtn").onclick = function () {
     $("datesEdit").style.display = "block"; $("datesLock").style.display = "none"; $("confirmBtn").style.display = "block";
+  };
+
+  /* Late Checkout toggle */
+  $("lateCheckoutCb").onchange = function () {
+    state.lateCheckout = $("lateCheckoutCb").checked;
+    if (state.lateCheckout) {
+      $("lateCheckoutDurF").style.display = "block";
+      $("lateCheckoutDurF").classList.remove("dc-reveal");
+      void $("lateCheckoutDurF").offsetWidth;
+      $("lateCheckoutDurF").classList.add("dc-reveal");
+    } else {
+      $("lateCheckoutDurF").style.display = "none";
+    }
+  };
+  $("lateCheckoutSeg").onclick = function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    state.lateCheckoutDuration = b.dataset.v;
+    setA($("lateCheckoutSeg"), state.lateCheckoutDuration);
   };
 
   /* Additional grooming toggle */
@@ -271,7 +331,7 @@ export function setupFinalBillUI() {
 
     /* Extra boarding */
     var exBrd = null;
-    if (data.boarding && $("incExtra").checked) {
+    if (data.boarding && !data.boarding.isDayCare && $("incExtra").checked) {
       var es = $("extraStart").value, ee = $("extraEnd").value;
       if (es && ee) {
         var esD = new Date(es + "T00:00:00"), eeD = new Date(ee + "T00:00:00");
@@ -308,25 +368,43 @@ export function setupFinalBillUI() {
     }
 
     var afterH = parseFloat($("afterHrs").value) || 0;
-    var dcH    = data.boarding ? (parseFloat($("dcHrs").value) || 0) : 0;
+    var dcH    = (data.boarding && !data.boarding.isDayCare) ? (parseFloat($("dcHrs").value) || 0) : 0;
     var dcA    = dcH * DC_RATE;
     var foods  = [...$("foodRows").children].map(function (r) { return parseFloat(r.querySelector("input").value) || 0; }).filter(function (v) { return v > 0; });
     var foodT  = foods.reduce(function (s, v) { return s + v; }, 0);
     var depA   = parseFloat($("depPaid").value) || 0;
+
+    /* Late Checkout */
+    var lcAmt = 0;
+    if (state.lateCheckout && data.boarding && data.boarding.nights > 1 && !data.boarding.isDayCare) {
+      var lcHrs = parseInt(state.lateCheckoutDuration) || 4;
+      lcAmt = lcHrs === 4 ? DAYCARE_4H : DAYCARE_8H;
+    }
+
     var sub    = boardAmt + (exBrd ? exBrd.total : 0) + preGA + addGA + afterH + dcA + foodT;
-    var out    = sub - depA;
+    var out    = sub - depA + lcAmt;
 
     var lines = [];
     lines.push(T("rcptFinal") + " \u2014 " + gn);
     lines.push("\u2501".repeat(23));
 
     if (data.boarding) {
-      var bd = data.boarding, bdp = bd.discountPct || 0;
-      lines.push(T("rcptBoarding"));
-      lines.push("  " + rLbl(bd) + " \u00b7 " + nightLbl(bd.nights) + (bdp > 0 ? " \u00b7 " + pctOff(bdp) : ""));
-      lines.push("  " + $("finDStart").value + " \u2192 " + $("finDEnd").value);
-      lines.push("  " + fmt(boardAmt) + " " + u);
-      lines.push("");
+      if (data.boarding.isDayCare) {
+        var petLbl = data.boarding.petType === "dog" ? "DOG" : "CAT";
+        var dcHrs2 = data.boarding.dayCareHours || 4;
+        var dcLbl = dcHrs2 === 4 ? T("dayCare4h") : T("dayCare8h");
+        lines.push(T("rcptDayCare") + " \u2014 " + petLbl);
+        lines.push("  " + data.boarding.startDate + " \u00b7 " + dcLbl);
+        lines.push("  " + fmt(boardAmt) + " " + u);
+        lines.push("");
+      } else {
+        var bd = data.boarding, bdp = bd.discountPct || 0;
+        lines.push(T("rcptBoarding"));
+        lines.push("  " + rLbl(bd) + " \u00b7 " + nightLbl(bd.nights) + (bdp > 0 ? " \u00b7 " + pctOff(bdp) : ""));
+        lines.push("  " + $("finDStart").value + " \u2192 " + $("finDEnd").value);
+        lines.push("  " + fmt(boardAmt) + " " + u);
+        lines.push("");
+      }
     }
 
     if (exBrd) {
@@ -369,6 +447,13 @@ export function setupFinalBillUI() {
     lines.push("");
     if (depA > 0) lines.push("  " + pR(T("rcptDepPaid"), 24) + pL("-" + fmt(depA), 6) + " " + u);
     lines.push("");
+    if (lcAmt > 0) {
+      var lcLabel = state.lateCheckoutDuration === "4" ? T("dayCare4h") : T("dayCare8h");
+      lines.push("\u2500".repeat(30));
+      lines.push("  " + pR(T("dayCare") + " (" + lcLabel + ")", 24) + pL(fmt(lcAmt), 6) + " " + u);
+      lines.push("\u2500".repeat(30));
+      lines.push("");
+    }
     lines.push("\u2501".repeat(23));
     lines.push("  " + pR(T("rcptTotalOut"), 24) + pL(fmt(out), 6) + " " + u);
 
@@ -379,7 +464,7 @@ export function setupFinalBillUI() {
     state.lastFin = {
       guestName: gn, data: data, preGroomAmt: preGA, preGroomActual: preGAct,
       addGroomAmt: addGA, exBrd: exBrd, afterH: afterH, dcH: dcH, dcAmt: dcA,
-      depAmt: depA, foods: foods, subtot: sub, outstanding: out,
+      depAmt: depA, foods: foods, subtot: sub, outstanding: out, lcAmt: lcAmt,
     };
     $("finSaveSt").textContent = "";
   };
@@ -402,6 +487,7 @@ export function setupFinalBillUI() {
         daycareTotal:   lf.dcAmt,
         depositPaid:    lf.depAmt,
         foodReceipts:   lf.foods,
+        lateCheckoutAmt: lf.lcAmt || 0,
         totalOutstanding: lf.outstanding,
         receiptText:    $("finRT").textContent,
       },

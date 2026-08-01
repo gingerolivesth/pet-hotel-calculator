@@ -2,9 +2,36 @@
 // Boarding cost calculator & form event handlers
 // ──────────────────────────────────────────────
 import { T, pctOff, nightLbl, uLabel, fmt } from './i18n.js';
-import { R } from './pricing.js';
+import { R, DAYCARE_4H, DAYCARE_8H } from './pricing.js';
 import { state } from './state.js';
 import { $, pR, pL, drS, setA } from './utils.js';
+
+function showPetFields() {
+  $("dogCF").style.display  = state.petType === "dog" ? "block" : "none";
+  $("catRF").style.display  = state.petType === "cat" ? "block" : "none";
+  $("catSF").style.display  = state.petType === "cat" ? "block" : "none";
+}
+
+function updateDateMode() {
+  var sv = $("dStart").value, ev = $("dEnd").value;
+  if (!sv || !ev) {
+    showPetFields();
+    $("daycareDurationF").style.display = "none";
+    return;
+  }
+  var s = new Date(sv + "T00:00:00"), e = new Date(ev + "T00:00:00");
+  var nights = Math.round((e - s) / 86400000);
+
+  if (nights === 0) {
+    $("dogCF").style.display = "none";
+    $("catRF").style.display = "none";
+    $("catSF").style.display = "none";
+    $("daycareDurationF").style.display = "block";
+  } else {
+    showPetFields();
+    $("daycareDurationF").style.display = "none";
+  }
+}
 
 /**
  * Wire up the boarding form. onChange() fires whenever
@@ -23,9 +50,7 @@ export function setupBoardingUI(onChange) {
     if (!b) return;
     state.petType = b.dataset.v;
     setA($("petSeg"), state.petType);
-    $("dogCF").style.display  = state.petType === "dog" ? "block" : "none";
-    $("catRF").style.display  = state.petType === "cat" ? "block" : "none";
-    $("catSF").style.display  = state.petType === "cat" ? "block" : "none";
+    updateDateMode();
     hide();
   };
 
@@ -46,7 +71,19 @@ export function setupBoardingUI(onChange) {
   };
 
   $("catSq").onchange = hide;
-  ["dStart", "dEnd", "discBoard"].forEach(function (id) { $(id).onchange = hide; });
+
+  $("dStart").onchange = function () { updateDateMode(); hide(); };
+  $("dEnd").onchange   = function () { updateDateMode(); hide(); };
+  $("discBoard").onchange = hide;
+
+  /* Day Care Duration selector */
+  $("daycareSeg").onclick = function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    state.dayCareDuration = b.dataset.v;
+    setA($("daycareSeg"), state.dayCareDuration);
+    hide();
+  };
 }
 
 /**
@@ -58,8 +95,36 @@ export function calcBoarding() {
   if (!sv || !ev) return { error: T("selBoth") };
   var s = new Date(sv + "T00:00:00"), e = new Date(ev + "T00:00:00");
   var nights = Math.round((e - s) / 86400000);
-  if (nights <= 0) return { error: T("endAfter") };
+  if (nights < 0) return { error: T("endAfter") };
 
+  /* ── Day Care mode (same dates) ── */
+  if (nights === 0) {
+    var dcHrs = parseInt(state.dayCareDuration) || 4;
+    var dcPrice = dcHrs === 4 ? DAYCARE_4H : DAYCARE_8H;
+    var petLabel = state.petType === "dog" ? "DOG" : "CAT";
+    var dcLabel = dcHrs === 4 ? T("dayCare4h") : T("dayCare8h");
+    var u = uLabel();
+    var lines = [];
+
+    lines.push(T("rcptDayCare") + " \u2014 " + petLabel);
+    lines.push("\u2501".repeat(23));
+    lines.push(sv + " \u00b7 " + dcLabel);
+    lines.push(fmt(dcPrice) + " " + u);
+
+    return {
+      error: null, isDayCare: true, nights: 0, dateRange: sv,
+      discountPct: 0, totalBeforeDiscount: dcPrice, discountAmount: 0,
+      totalDue: dcPrice, lines: lines,
+      raw: {
+        petType: state.petType, dogCount: state.dogCount,
+        catRoom: state.catRoom, catSqueeze: false,
+        startVal: sv, endVal: ev,
+        dayCareHours: dcHrs, dayCarePrice: dcPrice,
+      },
+    };
+  }
+
+  /* ── Normal boarding mode ── */
   var items = [], ht = "", rl = "", u = uLabel();
 
   if (state.petType === "dog") {

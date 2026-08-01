@@ -51,7 +51,9 @@ export function setupEstimateUI() {
     if (grm && grm.isRange) lines.push(T("rcptGrand") + ":      " + fmt(tL) + " \u2013 " + fmt(tH) + " " + u);
     else lines.push(T("rcptGrand") + ":      " + fmt(tL) + " " + u);
     lines.push("");
-    if (!hasBoard && hasGroom) lines.push(T("groomOnlyMsg"));
+    if (brd && brd.isDayCare) {
+      /* No deposit message for day care */
+    } else if (!hasBoard && hasGroom) lines.push(T("groomOnlyMsg"));
     else if (hasBoard && hasGroom) lines.push(T("depositBoardMsg") + " (" + fmt(Math.round(bD * 0.5)) + " " + u + ").");
     else if (hasBoard) lines.push(T("depositMsg") + " (" + fmt(Math.round(bD * 0.5)) + " " + u + ").");
 
@@ -87,6 +89,8 @@ export function setupEstimateUI() {
           discountPct: le.boarding.discountPct,
           totalBeforeDiscount: le.boarding.totalBeforeDiscount,
           discountAmount: le.boarding.discountAmount,
+          isDayCare: le.boarding.isDayCare || false,
+          dayCareHours: le.boarding.raw.dayCareHours || null,
         } : null,
         grooming: le.grooming ? {
           species: le.grooming.raw.species, weight: le.grooming.raw.weight,

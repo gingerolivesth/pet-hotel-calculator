@@ -6,6 +6,10 @@ import { T } from './i18n.js';
 /* ── Boarding rates (THB / night) ── */
 export const R = { dogBase: 500, dogAdd: 300, catSm: 400, catBg: 600, catSq: 50 };
 
+/* ── Day Care flat rates ── */
+export const DAYCARE_4H = 200;
+export const DAYCARE_8H = 300;
+
 /* ── Misc constants ── */
 export const DC_RATE = 50;   // late-pickup per hour
 export const RANGE   = 300;  // grooming price range for cats / long-coat dogs
