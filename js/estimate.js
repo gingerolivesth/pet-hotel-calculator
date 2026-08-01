@@ -5,7 +5,7 @@ import { T, pctOff, uLabel, fmt } from './i18n.js';
 import { state } from './state.js';
 import { $, copyToClipboard } from './utils.js';
 import { calcBoarding } from './boarding.js';
-import { buildGroom, calcGroom } from './grooming.js';
+import { buildGroomList, calcGroomAll } from './grooming.js';
 import { db, collection, addDoc, serverTimestamp } from './firebase-config.js';
 
 export function hideEstReceipt() {
@@ -18,7 +18,7 @@ export function setupEstimateUI() {
   $("incGroom").onchange = function () {
     $("groomBlkE").style.display = $("incGroom").checked ? "block" : "none";
     if ($("incGroom").checked && !state.groomApiE)
-      state.groomApiE = buildGroom($("groomBlkE"), "gE", state.petType);
+      state.groomApiE = buildGroomList($("groomBlkE"), "gE", state.petType);
     hideEstReceipt();
   };
 
@@ -32,7 +32,7 @@ export function setupEstimateUI() {
 
     var brd = null, grm = null, u = uLabel();
     if (hasBoard) { brd = calcBoarding(); if (brd.error) { $("estErr").textContent = brd.error; $("estErr").style.display = "block"; return; } }
-    if (hasGroom) { if (!state.groomApiE) state.groomApiE = buildGroom($("groomBlkE"), "gE", state.petType); grm = calcGroom(state.groomApiE, "gE"); }
+    if (hasGroom) { if (!state.groomApiE) state.groomApiE = buildGroomList($("groomBlkE"), "gE", state.petType); grm = calcGroomAll(state.groomApiE); }
 
     $("estErr").style.display = "none";
 
@@ -92,14 +92,16 @@ export function setupEstimateUI() {
           isDayCare: le.boarding.isDayCare || false,
           dayCareHours: le.boarding.raw.dayCareHours || null,
         } : null,
-        grooming: le.grooming ? {
-          species: le.grooming.raw.species, weight: le.grooming.raw.weight,
-          coat: le.grooming.raw.coat, groomType: le.grooming.raw.groomType,
-          alacarte: le.grooming.raw.alacarte, demattingHrs: le.grooming.raw.demattingHrs,
-          total: le.grooming.discTotalLow, totalHigh: le.grooming.discTotalHigh,
-          origLow: le.grooming.origLow, origHigh: le.grooming.origHigh,
-          discountPct: le.grooming.discountPct, isRange: le.grooming.isRange,
-        } : null,
+        grooming: (le.grooming && le.grooming.entries.length) ? le.grooming.entries.map(function (e) {
+          return {
+            species: e.raw.species, weight: e.raw.weight,
+            coat: e.raw.coat, groomType: e.raw.groomType,
+            alacarte: e.raw.alacarte, demattingHrs: e.raw.demattingHrs,
+            total: e.discTotalLow, totalHigh: e.discTotalHigh,
+            origLow: e.origLow, origHigh: e.origHigh,
+            discountPct: e.discountPct, isRange: e.isRange,
+          };
+        }) : null,
         grandTotal:      le.grandLow,
         grandTotalHigh:  le.grandHigh || null,
         boardOnlyTotal:  le.boardOnly || 0,

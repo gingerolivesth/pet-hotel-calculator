@@ -60,6 +60,8 @@ def("alacarte",     "A la carte",                   "เลือกรายก
 def("selectItems",  "Select Items",                 "เลือกรายการ");
 def("dematHrs",     "Intensive Dematting (hours)",   "กำจัดขนสัก (ชม.)");
 def("discGroomLbl", "Discount (grooming)",           "ส่วนลด (อาบน้ำตัดขน)");
+def("addAnotherPet","+ Add Another Pet",             "+ เพิ่มสัตว์อีกตัว");
+def("petLabel",     "Pet",                           "ตัวที่");
 def("genEst",       "Generate Estimate",            "สร้างใบประมาณราคา");
 def("copyText",     "Copy Text",                    "คัดลอก");
 def("saveBooking",  "Save Booking",                 "บันทึกการจอง");

@@ -5,7 +5,7 @@ import { T, pctOff, nightLbl, uLabel, fmt, thb, lang } from './i18n.js';
 import { R, DC_RATE, eRate, petS, rLbl, CAT_G, DOG_G, DAYCARE_4H, DAYCARE_8H } from './pricing.js';
 import { state, bkCache } from './state.js';
 import { $, pR, pL, copyToClipboard, showInlineConfirm, setA } from './utils.js';
-import { buildGroom, calcGroom } from './grooming.js';
+import { buildGroomList, calcGroom } from './grooming.js';
 import { db, collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, serverTimestamp } from './firebase-config.js';
 
 /* ────────────────── Delete helper ────────────────── */
@@ -100,9 +100,12 @@ function loadBooking(id, data) {
           html += "<br>" + T("boarding") + " <b>" + thb(data.boarding.totalDue) + "</b>";
         }
       }
-      if (data.grooming) {
-        var gt = data.grooming.isRange ? fmt(data.grooming.total) + "\u2013" + fmt(data.grooming.totalHigh) : fmt(data.grooming.total);
-        html += "<br>" + T("grooming") + " <b>" + gt + " THB</b>";
+      if (data.grooming && data.grooming.length) {
+        var gTotalLow = data.grooming.reduce(function (s, g) { return s + g.total; }, 0);
+        var gTotalHigh = data.grooming.reduce(function (s, g) { return s + (g.isRange ? g.totalHigh : g.total); }, 0);
+        var gAnyRange = data.grooming.some(function (g) { return g.isRange; });
+        var gt = gAnyRange ? fmt(gTotalLow) + "\u2013" + fmt(gTotalHigh) : fmt(gTotalLow);
+        html += "<br>" + T("grooming") + " <b>" + gt + " THB</b>" + (data.grooming.length > 1 ? " (" + data.grooming.length + " " + (lang === "th" ? "ตัว" : "pets") + ")" : "");
       }
       html += '<div class="bactions"><button type="button" class="alm" id="unloadBtn">' + T("chooseOther") + '</button>';
       if (id) html += '<button type="button" class="alm" id="delBannerBtn">' + T("deleteBooking") + '</button>';
@@ -145,13 +148,31 @@ function loadBooking(id, data) {
         }
       } else { $("datesCard").style.display = "none"; }
 
-      if (data.grooming && data.grooming.isRange) {
+      var groomList = $("confirmGroomList");
+      groomList.innerHTML = "";
+      if (data.grooming && data.grooming.some(function (g) { return g.isRange; })) {
         $("confirmGroom").style.display = "block";
-        var gdp = data.grooming.discountPct || 0;
-        $("groomHint").textContent = (lang === "th" ? "ประมาณ: " : "Estimated: ") + fmt(data.grooming.origLow || data.grooming.total) + "\u2013" + fmt(data.grooming.origHigh || data.grooming.totalHigh) + " " + uLabel() + (gdp > 0 ? " (" + pctOff(gdp) + ")" : "");
-        $("actualGroom").value = "";
-        $("groomDiscHint").textContent = gdp > 0 ? pctOff(gdp) + " \u2014 " + (lang === "th" ? "ใส่ราคาก่อนลด" : "Enter pre-discount price") : T("enterActual");
-      } else { $("confirmGroom").style.display = "none"; }
+        data.grooming.forEach(function (g, gi) {
+          if (!g.isRange) return;
+          var gdp = g.discountPct || 0;
+          var wrap = document.createElement("div");
+          wrap.className = "field";
+          var lbl = document.createElement("label");
+          lbl.textContent = (data.grooming.length > 1 ? T("petLabel") + " " + (gi + 1) + " \u2014 " : "") + T("actualGroomAmt");
+          var inp = document.createElement("input");
+          inp.type = "number"; inp.min = "0"; inp.inputMode = "numeric"; inp.id = "actualGroom" + gi;
+          var hint1 = document.createElement("div");
+          hint1.className = "hint";
+          hint1.textContent = (lang === "th" ? "ประมาณ: " : "Estimated: ") + fmt(g.origLow || g.total) + "\u2013" + fmt(g.origHigh || g.totalHigh) + " " + uLabel() + (gdp > 0 ? " (" + pctOff(gdp) + ")" : "");
+          var hint2 = document.createElement("div");
+          hint2.className = "hint";
+          hint2.textContent = gdp > 0 ? pctOff(gdp) + " \u2014 " + (lang === "th" ? "ใส่ราคาก่อนลด" : "Enter pre-discount price") : T("enterActual");
+          wrap.appendChild(lbl); wrap.appendChild(inp); wrap.appendChild(hint1); wrap.appendChild(hint2);
+          groomList.appendChild(wrap);
+        });
+      } else {
+        $("confirmGroom").style.display = "none";
+      }
 
       if (data.boarding && !data.boarding.isDayCare) {
         $("extraCard").style.display = "block";
@@ -183,8 +204,8 @@ function loadBooking(id, data) {
   } catch (e) { console.error("loadBooking:", e); }
 
   $("finRW").classList.remove("show");
-  $("incGroomF").checked = false; $("groomBlkF").style.display = "none";
-  $("addGroomF").style.display = "none"; state.groomApiF = null;
+  $("incGroomF").checked = false; $("groomBlkF").style.display = "none"; $("groomBlkF").innerHTML = "";
+  $("addGroomF").style.display = "none"; $("addGroomF").innerHTML = ""; state.groomApiF = null;
   $("finForm").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
@@ -204,19 +225,36 @@ function updExtra() {
   $("extraCalc").textContent = txt;
 }
 
-/* ────────────────── Additional grooming hint ────────────────── */
+/* ────────────────── Additional grooming hints ────────────────── */
 
 function updAddG() {
   var f = $("addGroomF");
-  if (!state.groomApiF || !$("incGroomF").checked) { f.style.display = "none"; return; }
-  if (state.groomApiF.isRange()) {
-    f.style.display = "block";
-    var st = state.groomApiF.getState(), p = 0;
+  if (!state.groomApiF || !$("incGroomF").checked) { f.style.display = "none"; f.innerHTML = ""; return; }
+  var apis = state.groomApiF.getEntries();
+  var rangeEntries = [];
+  apis.forEach(function (api, i) { if (api.isRange()) rangeEntries.push({ api: api, i: i }); });
+  if (rangeEntries.length === 0) { f.style.display = "none"; f.innerHTML = ""; return; }
+  f.style.display = "block";
+  f.innerHTML = "";
+  rangeEntries.forEach(function (entry) {
+    var st = entry.api.getState(), p = 0;
     if (st.groomType === "basic") p = st.species === "cat" ? CAT_G.basic[st.weight] : DOG_G.basic[st.coat][st.weight];
     else if (st.groomType === "full") p = st.species === "cat" ? CAT_G.full[st.weight] : DOG_G.full[st.coat][st.weight];
-    var dp = parseInt(state.groomApiF.container.querySelector("#gFDisc").value) || 0;
-    $("addGroomHint").textContent = pctOff(dp) + ": " + fmt(p - Math.round(p * dp / 100)) + "\u2013" + fmt(p + R - Math.round((p + R) * dp / 100)) + " " + uLabel();
-  } else { f.style.display = "none"; }
+    var dp = parseInt(entry.api.container.querySelector("#" + entry.api.px + "Disc").value) || 0;
+
+    var wrap = document.createElement("div");
+    wrap.className = "field";
+    var lbl = document.createElement("label");
+    lbl.textContent = (apis.length > 1 ? T("petLabel") + " " + (entry.i + 1) + " \u2014 " : "") + T("actualAddGroomAmt");
+    var inp = document.createElement("input");
+    inp.type = "number"; inp.min = "0"; inp.inputMode = "numeric"; inp.id = "addGroomPrice" + entry.i;
+    var hint = document.createElement("div");
+    hint.className = "hint";
+    hint.textContent = pctOff(dp) + ": " + fmt(p - Math.round(p * dp / 100)) + "\u2013" + fmt(p + R - Math.round((p + R) * dp / 100)) + " " + uLabel();
+
+    wrap.appendChild(lbl); wrap.appendChild(inp); wrap.appendChild(hint);
+    f.appendChild(wrap);
+  });
 }
 
 /* ────────────────── Food row helpers ────────────────── */
@@ -313,7 +351,7 @@ export function setupFinalBillUI() {
   /* Additional grooming toggle */
   $("incGroomF").onchange = function () {
     $("groomBlkF").style.display = $("incGroomF").checked ? "block" : "none";
-    if ($("incGroomF").checked && !state.groomApiF) state.groomApiF = buildGroom($("groomBlkF"), "gF", "dog", updAddG);
+    if ($("incGroomF").checked && !state.groomApiF) state.groomApiF = buildGroomList($("groomBlkF"), "gF", "dog", updAddG);
     updAddG();
   };
 
@@ -344,27 +382,44 @@ export function setupFinalBillUI() {
       }
     }
 
-    /* Pre-booked grooming */
-    var preGA = 0, preGAct = 0;
-    if (data.grooming) {
-      if (data.grooming.isRange) {
-        preGAct = parseFloat($("actualGroom").value);
-        if (isNaN(preGAct) || preGAct < 0) { $("finErr").textContent = T("enterActual"); $("finErr").style.display = "block"; return; }
-        var gdp = data.grooming.discountPct || 0;
-        preGA = preGAct - Math.round(preGAct * gdp / 100);
-      } else { preGA = data.grooming.total; }
+    /* Pre-booked grooming (up to 3 records) */
+    var preGA = 0, preGActArr = [];
+    if (data.grooming && data.grooming.length) {
+      for (var pgi = 0; pgi < data.grooming.length; pgi++) {
+        var pgEntry = data.grooming[pgi];
+        if (pgEntry.isRange) {
+          var pgActEl = $("actualGroom" + pgi);
+          var pgAct = parseFloat(pgActEl ? pgActEl.value : NaN);
+          if (isNaN(pgAct) || pgAct < 0) { $("finErr").textContent = T("enterActual"); $("finErr").style.display = "block"; return; }
+          var pgdp = pgEntry.discountPct || 0;
+          preGActArr.push(pgAct);
+          preGA += pgAct - Math.round(pgAct * pgdp / 100);
+        } else {
+          preGActArr.push(null);
+          preGA += pgEntry.total;
+        }
+      }
     }
 
-    /* Additional grooming */
-    var addGA = 0;
+    /* Additional grooming (up to 3 records) */
+    var addGA = 0, addGAEntries = [];
     if ($("incGroomF").checked) {
-      if (!state.groomApiF) state.groomApiF = buildGroom($("groomBlkF"), "gF", "dog", updAddG);
-      var gr = calcGroom(state.groomApiF, "gF");
-      if (gr.isRange) {
-        var av = parseFloat($("addGroomPrice").value);
-        if (isNaN(av) || av < 0) { $("finErr").textContent = T("enterActualAdd"); $("finErr").style.display = "block"; return; }
-        addGA = av - Math.round(av * gr.discountPct / 100);
-      } else { addGA = gr.total; }
+      if (!state.groomApiF) state.groomApiF = buildGroomList($("groomBlkF"), "gF", "dog", updAddG);
+      var apis2 = state.groomApiF.getEntries();
+      for (var ai = 0; ai < apis2.length; ai++) {
+        var rE = calcGroom(apis2[ai]);
+        var amtE;
+        if (rE.isRange) {
+          var avEl = $("addGroomPrice" + ai);
+          var avv = parseFloat(avEl ? avEl.value : NaN);
+          if (isNaN(avv) || avv < 0) { $("finErr").textContent = T("enterActualAdd"); $("finErr").style.display = "block"; return; }
+          amtE = avv - Math.round(avv * rE.discountPct / 100);
+        } else {
+          amtE = rE.total;
+        }
+        addGA += amtE;
+        addGAEntries.push(amtE);
+      }
     }
 
     var afterH = parseFloat($("afterHrs").value) || 0;
@@ -417,21 +472,29 @@ export function setupFinalBillUI() {
       lines.push("");
     }
 
-    if (data.grooming) {
-      var gd = data.grooming, gdp2 = gd.discountPct || 0;
+    if (data.grooming && data.grooming.length) {
       lines.push(T("rcptPreGroom"));
-      if (gd.isRange) {
-        lines.push("  " + fmt(preGAct) + " " + u);
-        if (gdp2 > 0) {
-          lines.push("  " + T("rcptDiscount") + " (" + pctOff(gdp2) + "): -" + fmt(Math.round(preGAct * gdp2 / 100)) + " " + u);
-          lines.push("  " + T("rcptTotal") + ": " + fmt(preGA) + " " + u);
+      data.grooming.forEach(function (pgEntry, pgi) {
+        var pfx = data.grooming.length > 1 ? T("petLabel") + " " + (pgi + 1) + ": " : "";
+        if (pgEntry.isRange) {
+          var pgAct2 = preGActArr[pgi];
+          var pgdp2 = pgEntry.discountPct || 0;
+          lines.push("  " + pfx + fmt(pgAct2) + " " + u);
+          if (pgdp2 > 0) {
+            lines.push("  " + T("rcptDiscount") + " (" + pctOff(pgdp2) + "): -" + fmt(Math.round(pgAct2 * pgdp2 / 100)) + " " + u);
+            lines.push("  " + T("rcptTotal") + ": " + fmt(pgAct2 - Math.round(pgAct2 * pgdp2 / 100)) + " " + u);
+          }
+        } else {
+          lines.push("  " + pfx + fmt(pgEntry.total) + " " + u);
         }
-      } else { lines.push("  " + fmt(preGA) + " " + u); }
+      });
       lines.push("");
     }
 
     var items = [];
-    if (addGA > 0) items.push([T("rcptGroomAdd"), addGA]);
+    addGAEntries.forEach(function (amtE, aei) {
+      if (amtE > 0) items.push([T("rcptGroomAdd") + (addGAEntries.length > 1 ? " (" + T("petLabel") + " " + (aei + 1) + ")" : ""), amtE]);
+    });
     if (afterH > 0) items.push([T("rcptAfterHrs"), afterH]);
     if (dcA > 0) items.push([T("rcptLatePick") + " (" + dcH + "h)", dcA]);
     foods.forEach(function (a, i) { items.push([T("rcptFood") + " #" + (i + 1), a]); });
@@ -462,8 +525,8 @@ export function setupFinalBillUI() {
     $("finRW").scrollIntoView({ behavior: "smooth", block: "nearest" });
 
     state.lastFin = {
-      guestName: gn, data: data, preGroomAmt: preGA, preGroomActual: preGAct,
-      addGroomAmt: addGA, exBrd: exBrd, afterH: afterH, dcH: dcH, dcAmt: dcA,
+      guestName: gn, data: data, preGroomAmt: preGA, preGroomActual: preGActArr,
+      addGroomAmt: addGA, addGroomEntries: addGAEntries, exBrd: exBrd, afterH: afterH, dcH: dcH, dcAmt: dcA,
       depAmt: depA, foods: foods, subtot: sub, outstanding: out, lcAmt: lcAmt,
     };
     $("finSaveSt").textContent = "";
@@ -479,8 +542,9 @@ export function setupFinalBillUI() {
     var lf = state.lastFin;
     var payload = {
       finalBill: {
-        preGroomActual: lf.preGroomActual || null,
+        preGroomActual: (lf.preGroomActual && lf.preGroomActual.length) ? lf.preGroomActual : null,
         addGroomActual: lf.addGroomAmt > 0 ? lf.addGroomAmt : null,
+        addGroomEntries: (lf.addGroomEntries && lf.addGroomEntries.length) ? lf.addGroomEntries : null,
         extraBoarding:  lf.exBrd,
         afterHoursFee:  lf.afterH,
         daycareHrs:     lf.dcH,

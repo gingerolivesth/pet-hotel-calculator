@@ -7,7 +7,7 @@ import { $, pR, pL, setA } from './utils.js';
 
 /**
  * Build a grooming form into `container` with element-id prefix `px`.
- * Returns { getState(), isRange(), container }.
+ * Returns { getState(), isRange(), container, px }.
  */
 export function buildGroom(container, px, defSp, onChg) {
   container.innerHTML =
@@ -90,14 +90,91 @@ export function buildGroom(container, px, defSp, onChg) {
     getState:  function () { return st; },
     isRange:   function () { return (st.groomType !== "alacarte") && (st.species === "cat" || (st.species === "dog" && st.coat === "long")); },
     container: container,
+    px: px,
   };
 }
 
 /**
- * Calculate grooming costs from a buildGroom() API + prefix.
+ * Build a repeatable list (1–3) of grooming forms into `container`, with
+ * an "add another pet" button and per-entry remove buttons. Used so up to
+ * 3 pets (e.g. cats sharing a big room) can each get their own grooming
+ * charge, itemized individually in estimates and final bills.
+ * Returns { getEntries(), container }.
  */
-export function calcGroom(bk, px) {
-  var st = bk.getState(), ct = bk.container, u = uLabel();
+export function buildGroomList(container, px, defSp, onChg, max) {
+  max = max || 3;
+  var entries = [];
+  var counter = 0;
+
+  var listDiv = document.createElement("div");
+  var addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "add-line-btn";
+  addBtn.textContent = T("addAnotherPet");
+
+  container.innerHTML = "";
+  container.appendChild(listDiv);
+  container.appendChild(addBtn);
+
+  function relabel() {
+    entries.forEach(function (e, i) {
+      e.title.textContent = T("petLabel") + " " + (i + 1);
+      e.rm.style.display = entries.length > 1 ? "inline-block" : "none";
+    });
+    addBtn.style.display = entries.length >= max ? "none" : "block";
+  }
+
+  function addEntry() {
+    if (entries.length >= max) return;
+    var idx = counter++;
+    var wrap = document.createElement("div");
+    wrap.className = "groom-entry";
+    var head = document.createElement("div");
+    head.className = "groom-entry-head";
+    var title = document.createElement("span");
+    title.className = "groom-entry-title";
+    var rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "rm";
+    rm.textContent = "\u00d7";
+    head.appendChild(title);
+    head.appendChild(rm);
+    var formDiv = document.createElement("div");
+    wrap.appendChild(head);
+    wrap.appendChild(formDiv);
+    listDiv.appendChild(wrap);
+
+    var api = buildGroom(formDiv, px + idx, defSp, onChg);
+    var entry = { api: api, wrap: wrap, title: title, rm: rm };
+    entries.push(entry);
+
+    rm.onclick = function () {
+      var i = entries.indexOf(entry);
+      if (i === -1) return;
+      wrap.remove();
+      entries.splice(i, 1);
+      relabel();
+      if (onChg) onChg();
+    };
+
+    relabel();
+  }
+
+  addBtn.onclick = function () { addEntry(); if (onChg) onChg(); };
+
+  addEntry();
+
+  return {
+    getEntries: function () { return entries.map(function (e) { return e.api; }); },
+    container: container,
+  };
+}
+
+/**
+ * Calculate grooming costs from a single buildGroom() API.
+ */
+export function calcGroom(bk) {
+  var st = bk.getState(), ct = bk.container, px = bk.px, u = uLabel();
   var dm = st.groomType === "alacarte"
     ? (parseFloat(ct.querySelector("#" + px + "Dm").value) || 0) : 0;
   var discPct = parseInt(ct.querySelector("#" + px + "Disc").value) || 0;
@@ -154,6 +231,34 @@ export function calcGroom(bk, px) {
     origLow: oL, origHigh: oH, isRange: isR, discountPct: discPct,
     lines: lines,
     raw: { species: st.species, weight: st.weight, coat: st.coat, groomType: st.groomType, alacarte: st.alacarte, demattingHrs: dm },
+  };
+}
+
+/**
+ * Calculate + combine grooming costs for every entry in a buildGroomList()
+ * API. Aggregates totals and prefixes each entry's receipt lines with a
+ * "Pet N" label when there is more than one entry.
+ */
+export function calcGroomAll(listApi) {
+  var apis = listApi.getEntries();
+  var results = apis.map(function (api) { return calcGroom(api); });
+  var multi = results.length > 1;
+  var lines = [];
+  results.forEach(function (r, i) {
+    if (multi) lines.push(T("petLabel") + " " + (i + 1));
+    lines = lines.concat(r.lines);
+    if (i < results.length - 1) lines.push("");
+  });
+
+  return {
+    entries: results,
+    total: results.reduce(function (s, r) { return s + r.discTotalLow; }, 0),
+    discTotalLow: results.reduce(function (s, r) { return s + r.discTotalLow; }, 0),
+    discTotalHigh: results.reduce(function (s, r) { return s + r.discTotalHigh; }, 0),
+    origLow: results.reduce(function (s, r) { return s + r.origLow; }, 0),
+    origHigh: results.reduce(function (s, r) { return s + r.origHigh; }, 0),
+    isRange: results.some(function (r) { return r.isRange; }),
+    lines: lines,
   };
 }
 
